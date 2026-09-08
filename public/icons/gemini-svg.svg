@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="wave-grad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Dark minimal background -->
+  <rect x="8" y="8" width="84" height="84" rx="20" fill="#1e1e2e" />
+  
+  <!-- Dynamic wave for Live Wallpaper -->
+  <path d="M 8 50 Q 30 20 50 50 T 92 50 L 92 92 L 8 92 Z" fill="url(#wave-grad)" opacity="0.8" clip-path="url(#rounded-clip)" />
+  
+  <!-- Organized/New Tab Plus Icon -->
+  <rect x="45" y="30" width="10" height="40" rx="4" fill="#ffffff" />
+  <rect x="30" y="45" width="40" height="10" rx="4" fill="#ffffff" />
+</svg>

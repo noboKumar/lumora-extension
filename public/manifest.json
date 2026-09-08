@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Lumora — Aesthetic Personal Dashboard",
+  "short_name": "Lumora",
+  "version": "1.0.0",
+  "description": "Transform your default New Tab into a customizable, modern, aesthetic personal workspace.",
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "permissions": [
+    "storage",
+    "bookmarks",
+    "geolocation"
+  ],
+  "host_permissions": [
+    "https://images.unsplash.com/*",
+    "https://assets.mixkit.co/*",
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://www.google.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: https://images.unsplash.com https://www.google.com https://lh3.googleusercontent.com; media-src 'self' blob: data: https://assets.mixkit.co https://images.unsplash.com; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://www.google.com; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
