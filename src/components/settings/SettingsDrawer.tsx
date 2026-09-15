@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserSettings, ThemeId, SearchEngine, WallpaperType } from '../../types';
 import { PRESET_WALLPAPERS } from '../../hooks/useWallpaper';
 import { saveCustomWallpaperMedia } from '../../lib/indexed-db';
@@ -13,6 +13,7 @@ interface SettingsDrawerProps {
   settings: UserSettings;
   onUpdateSettings: (updated: Partial<UserSettings> | ((prev: UserSettings) => UserSettings)) => void;
   onResetSettings: () => void;
+  initialTab?: 'appearance' | 'wallpaper' | 'clock' | 'search' | 'widgets' | 'weather' | 'data';
 }
 
 export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
@@ -21,10 +22,17 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
   settings,
   onUpdateSettings,
   onResetSettings,
+  initialTab,
 }) => {
   const [activeTab, setActiveTab] = useState<
     'appearance' | 'wallpaper' | 'clock' | 'search' | 'widgets' | 'weather' | 'data'
-  >('appearance');
+  >(initialTab || 'appearance');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
 
   const [uploadLoading, setUploadLoading] = useState(false);
 
@@ -364,6 +372,35 @@ export const SettingsDrawer: React.FC<SettingsDrawerProps> = ({
                     >
                       24-Hour
                     </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-semibold text-white/80 mb-2">Clock Design Style</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'mond', label: 'Rainmeter Mond (Default)' },
+                      { id: 'modern', label: 'Modern Big Digital' },
+                      { id: 'minimal', label: 'Minimal Light' },
+                      { id: 'terminal', label: 'Terminal Code' },
+                    ].map((st) => (
+                      <button
+                        key={st.id}
+                        onClick={() =>
+                          onUpdateSettings((prev) => ({
+                            ...prev,
+                            clock: { ...prev.clock, style: st.id as any },
+                          }))
+                        }
+                        className={`p-2 text-xs rounded-xl border font-medium text-left transition-all ${
+                          (settings.clock.style || 'mond') === st.id
+                            ? 'bg-accent/20 border-accent text-white font-semibold'
+                            : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 

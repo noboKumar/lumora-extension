@@ -34,7 +34,7 @@ export interface ClockConfig {
   showSeconds: boolean;
   showDate: boolean;
   showDay: boolean;
-  style: 'classic' | 'modern' | 'minimal' | 'bold' | 'terminal';
+  style: 'classic' | 'modern' | 'minimal' | 'bold' | 'terminal' | 'mond';
   fontSize: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   alignment: 'left' | 'center' | 'right';
 }

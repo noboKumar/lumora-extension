@@ -1,129 +1,153 @@
-import React, { useState } from 'react';
-import { BookmarksConfig, QuickLink } from '../../types';
-import { useBookmarks } from '../../hooks/useBookmarks';
+import React, { useState, useMemo, useEffect } from "react";
+import { BookmarksConfig, QuickLink } from "../../types";
+import { useBookmarks, TopSiteNode } from "../../hooks/useBookmarks";
 import {
-  Plus, X, Folder, ExternalLink, Globe, Trash2, Edit2,
-  Youtube, Github, Twitter, Instagram, Linkedin, Facebook,
-  Mail, Search, ShoppingCart, Music, Video, Code2, Database,
-  BookOpen, Newspaper, MessageSquare, Cloud, Gamepad2, Briefcase,
-  Camera, Map, Home, Star, Zap, Heart, Coffee, Tv
-} from 'lucide-react';
+  Plus,
+  X,
+  Folder,
+  ExternalLink,
+  Trash2,
+  Edit2,
+  Flame,
+  BookmarkCheck,
+  Star,
+} from "lucide-react";
 
 interface BookmarksWidgetProps {
   config: BookmarksConfig;
   quickLinks: QuickLink[];
-  onAddQuickLink: (link: Omit<QuickLink, 'id'>) => void;
+  onAddQuickLink: (link: Omit<QuickLink, "id">) => void;
   onDeleteQuickLink: (id: string) => void;
   onUpdateQuickLink: (link: QuickLink) => void;
 }
 
-// Map of domain keywords -> { icon component, gradient colors }
-const SITE_ICON_MAP: Record<string, { icon: React.ElementType; gradient: string }> = {
-  youtube: { icon: Youtube, gradient: 'from-red-500 to-red-700' },
-  github: { icon: Github, gradient: 'from-gray-600 to-gray-900' },
-  twitter: { icon: Twitter, gradient: 'from-sky-400 to-blue-600' },
-  x: { icon: Twitter, gradient: 'from-sky-400 to-blue-600' },
-  instagram: { icon: Instagram, gradient: 'from-pink-500 via-purple-500 to-orange-400' },
-  linkedin: { icon: Linkedin, gradient: 'from-blue-600 to-blue-800' },
-  facebook: { icon: Facebook, gradient: 'from-blue-500 to-blue-700' },
-  gmail: { icon: Mail, gradient: 'from-red-400 to-orange-500' },
-  mail: { icon: Mail, gradient: 'from-red-400 to-orange-500' },
-  google: { icon: Search, gradient: 'from-blue-400 via-yellow-400 to-red-400' },
-  amazon: { icon: ShoppingCart, gradient: 'from-orange-400 to-yellow-500' },
-  spotify: { icon: Music, gradient: 'from-green-500 to-emerald-700' },
-  netflix: { icon: Tv, gradient: 'from-red-600 to-red-900' },
-  twitch: { icon: Video, gradient: 'from-purple-500 to-violet-700' },
-  reddit: { icon: MessageSquare, gradient: 'from-orange-500 to-red-600' },
-  discord: { icon: MessageSquare, gradient: 'from-indigo-500 to-violet-600' },
-  slack: { icon: MessageSquare, gradient: 'from-pink-400 to-purple-500' },
-  notion: { icon: BookOpen, gradient: 'from-gray-700 to-gray-900' },
-  medium: { icon: Newspaper, gradient: 'from-green-600 to-teal-700' },
-  stackoverflow: { icon: Code2, gradient: 'from-orange-500 to-amber-600' },
-  vercel: { icon: Zap, gradient: 'from-gray-800 to-black' },
-  figma: { icon: Star, gradient: 'from-pink-500 via-purple-500 to-blue-500' },
-  dropbox: { icon: Cloud, gradient: 'from-blue-500 to-blue-700' },
-  drive: { icon: Cloud, gradient: 'from-blue-400 via-green-400 to-yellow-400' },
-  maps: { icon: Map, gradient: 'from-green-400 to-blue-500' },
-  steam: { icon: Gamepad2, gradient: 'from-blue-700 to-gray-900' },
-  epic: { icon: Gamepad2, gradient: 'from-gray-600 to-blue-800' },
-  jira: { icon: Briefcase, gradient: 'from-blue-500 to-blue-700' },
-  trello: { icon: Briefcase, gradient: 'from-blue-400 to-teal-500' },
-  unsplash: { icon: Camera, gradient: 'from-gray-700 to-gray-900' },
-  pinterest: { icon: Heart, gradient: 'from-red-500 to-red-700' },
-  producthunt: { icon: Star, gradient: 'from-orange-400 to-red-500' },
-  devto: { icon: Code2, gradient: 'from-gray-800 to-gray-600' },
-  hashnode: { icon: Code2, gradient: 'from-blue-600 to-indigo-700' },
+// Component to dynamically render site favicon using Chrome's official favicon endpoint + MV3 + DDG
+const SiteFavicon: React.FC<{
+  url: string;
+  title: string;
+  className?: string;
+  containerClassName?: string;
+}> = ({
+  url,
+  title,
+  className = "w-6 h-6",
+  containerClassName = "w-12 h-12",
+}) => {
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [hasError, setHasError] = useState(false);
+
+  const { sources, initial } = useMemo(() => {
+    let formattedUrl = (url || "").trim();
+    if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = `https://${formattedUrl}`;
+    }
+
+    let dom = "";
+    let init = title ? title.charAt(0).toUpperCase() : "?";
+
+    try {
+      if (formattedUrl) {
+        const parsed = new URL(formattedUrl);
+        dom = parsed.hostname.replace(/^www\./, "");
+        if (dom.charAt(0)) {
+          init = dom.charAt(0).toUpperCase();
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const srcList: string[] = [];
+
+    // 1. Chrome's native favicon cache (fastest, most accurate, no external request)
+    if (typeof chrome !== "undefined" && chrome.runtime?.id && formattedUrl) {
+      try {
+        srcList.push(
+          `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(formattedUrl)}&size=64`,
+        );
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Google Favicon V2 (external fallback for sites Chrome hasn't visited/cached)
+    if (formattedUrl) {
+      srcList.push(
+        `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(formattedUrl)}&size=64`,
+      );
+    }
+
+    // 3. DuckDuckGo
+    if (dom) {
+      srcList.push(`https://icons.duckduckgo.com/ip3/${dom}.ico`);
+    }
+
+    // 4. Google s2
+    if (dom) {
+      srcList.push(`https://www.google.com/s2/favicons?domain=${dom}&sz=64`);
+    }
+
+    // 5. Direct favicon.ico
+    if (dom) {
+      srcList.push(`https://${dom}/favicon.ico`);
+    }
+
+    return { sources: srcList, initial: init };
+  }, [url, title]);
+
+  useEffect(() => {
+    setSourceIndex(0);
+    setHasError(false);
+  }, [url]);
+
+  const handleImageError = () => {
+    if (sourceIndex + 1 < sources.length) {
+      setSourceIndex((prev) => prev + 1);
+    } else {
+      setHasError(true);
+    }
+  };
+
+  return (
+    <div
+      className={`${containerClassName} rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center justify-center shadow-md relative overflow-hidden group-hover:scale-110 group-hover:border-white/30 group-hover:shadow-glow transition-all duration-300 shrink-0`}
+    >
+      {!hasError && sources.length > 0 ? (
+        <img
+          src={sources[sourceIndex]}
+          alt={title}
+          className={`${className} object-contain rounded select-none pointer-events-none`}
+          onError={handleImageError}
+        />
+      ) : (
+        <span className="font-bold text-white/90 text-sm select-none">
+          {initial}
+        </span>
+      )}
+    </div>
+  );
 };
 
-// Palette for unknown sites — cycles based on link id
-const FALLBACK_GRADIENTS = [
-  'from-violet-500 to-purple-700',
-  'from-cyan-400 to-blue-600',
-  'from-emerald-400 to-teal-600',
-  'from-pink-500 to-rose-600',
-  'from-amber-400 to-orange-600',
-  'from-sky-400 to-indigo-600',
-  'from-fuchsia-500 to-pink-700',
-  'from-lime-400 to-green-600',
-];
-
-function getSiteInfo(url: string, id: string): { icon: React.ElementType; gradient: string } {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    for (const [keyword, info] of Object.entries(SITE_ICON_MAP)) {
-      if (hostname.includes(keyword)) return info;
-    }
-  } catch {
-    // ignore
-  }
-  // Deterministic fallback gradient based on id
-  const idx = parseInt(id, 10) % FALLBACK_GRADIENTS.length || id.charCodeAt(0) % FALLBACK_GRADIENTS.length;
-  return { icon: Globe, gradient: FALLBACK_GRADIENTS[Math.abs(idx) % FALLBACK_GRADIENTS.length] };
-}
-
-// A single shortcut icon card
-const ShortcutIcon: React.FC<{ link: QuickLink; onEdit: (e: React.MouseEvent) => void; onDelete: (e: React.MouseEvent) => void }> = ({
-  link,
-  onEdit,
-  onDelete,
-}) => {
-  const [imgFailed, setImgFailed] = useState(false);
-  const { icon: LucideIcon, gradient } = getSiteInfo(link.url, link.id);
-
-  // Try favicon first; if it fails, show the lucide icon
-  let faviconUrl = '';
-  try {
-    const domain = new URL(link.url).hostname;
-    faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-  } catch {
-    // leave empty
-  }
-
-  const showFavicon = !imgFailed && !!faviconUrl;
-
+// Quick Link Shortcut Icon Component using Website Favicon
+const ShortcutIcon: React.FC<{
+  link: QuickLink;
+  onEdit: (e: React.MouseEvent) => void;
+  onDelete: (e: React.MouseEvent) => void;
+}> = ({ link, onEdit, onDelete }) => {
   return (
     <div className="group relative">
       <a
         href={link.url}
+        target="_blank"
+        rel="noreferrer"
         className="flex flex-col items-center justify-center p-3.5 rounded-2xl glass-panel hover:bg-white/15 hover:border-white/30 hover:-translate-y-1.5 transition-all duration-300 shadow-glass"
       >
-        {/* Icon Container */}
-        <div
-          className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-2.5 shadow-lg group-hover:scale-110 group-hover:shadow-xl transition-all duration-300 relative overflow-hidden`}
-        >
-          {showFavicon ? (
-            <img
-              src={faviconUrl}
-              alt={link.title}
-              className="w-6 h-6 object-contain"
-              onError={() => setImgFailed(true)}
-            />
-          ) : (
-            <LucideIcon className="w-5 h-5 text-white drop-shadow" strokeWidth={2} />
-          )}
-          {/* Subtle shine overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-white/20 rounded-2xl pointer-events-none" />
-        </div>
+        <SiteFavicon
+          url={link.url}
+          title={link.title}
+          className="w-6 h-6"
+          containerClassName="w-12 h-12 mb-2.5"
+        />
 
         <span className="text-xs font-medium text-white/90 truncate max-w-full text-center group-hover:text-white leading-tight">
           {link.title}
@@ -131,17 +155,17 @@ const ShortcutIcon: React.FC<{ link: QuickLink; onEdit: (e: React.MouseEvent) =>
       </a>
 
       {/* Edit & Delete Hover Actions */}
-      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-black/60 backdrop-blur-md p-1 rounded-lg">
+      <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-black/70 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-lg">
         <button
           onClick={onEdit}
-          className="p-1 text-white/70 hover:text-white hover:bg-white/20 rounded"
+          className="p-1 text-white/70 hover:text-white hover:bg-white/20 rounded transition-colors"
           title="Edit"
         >
           <Edit2 className="w-3 h-3" />
         </button>
         <button
           onClick={onDelete}
-          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded"
+          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
           title="Delete"
         >
           <Trash2 className="w-3 h-3" />
@@ -158,13 +182,16 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
   onDeleteQuickLink,
   onUpdateQuickLink,
 }) => {
-  const [activeTab, setActiveTab] = useState<'quick' | 'chrome'>('quick');
+  const [activeTab, setActiveTab] = useState<"quick" | "bookmarks">("quick");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newUrl, setNewUrl] = useState('');
+  const [newTitle, setNewTitle] = useState("");
+  const [newUrl, setNewUrl] = useState("");
   const [editingLink, setEditingLink] = useState<QuickLink | null>(null);
 
-  const { chromeBookmarks, loading } = useBookmarks(config.mode, quickLinks);
+  const { chromeBookmarks, topSites, loading } = useBookmarks(
+    config.mode,
+    quickLinks,
+  );
 
   if (!config.enabled) return null;
 
@@ -190,8 +217,8 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
       });
     }
 
-    setNewTitle('');
-    setNewUrl('');
+    setNewTitle("");
+    setNewUrl("");
     setEditingLink(null);
     setIsAddModalOpen(false);
   };
@@ -206,89 +233,224 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto my-6 z-10">
+    <div className="w-full max-w-4xl mx-auto my-2.5 z-10">
       {/* Tab Switcher */}
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-2 bg-black/20 p-1 rounded-xl border border-white/10 backdrop-blur-md">
           <button
-            onClick={() => setActiveTab('quick')}
-            className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'quick' ? 'bg-white/20 text-white shadow' : 'text-white/60 hover:text-white'
+            onClick={() => setActiveTab("quick")}
+            className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === "quick"
+                ? "bg-white/20 text-white shadow"
+                : "text-white/60 hover:text-white"
             }`}
           >
-            Quick Launch
+            <span>Quick Launch</span>
           </button>
           <button
-            onClick={() => setActiveTab('chrome')}
-            className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'chrome' ? 'bg-white/20 text-white shadow' : 'text-white/60 hover:text-white'
+            onClick={() => setActiveTab("bookmarks")}
+            className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === "bookmarks"
+                ? "bg-white/20 text-white shadow"
+                : "text-white/60 hover:text-white"
             }`}
           >
-            Chrome Bookmarks
+            <span>Bookmarks</span>
+            {topSites.length > 0 && (
+              <span
+                className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"
+                title="Most used links active"
+              />
+            )}
           </button>
         </div>
 
-        {activeTab === 'quick' && (
-          <button
-            onClick={() => {
-              setEditingLink(null);
-              setNewTitle('');
-              setNewUrl('');
-              setIsAddModalOpen(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl backdrop-blur-md transition-all shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add Link</span>
-          </button>
-        )}
+        <button
+          onClick={() => {
+            setEditingLink(null);
+            setNewTitle("");
+            setNewUrl("");
+            setIsAddModalOpen(true);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 border border-white/15 rounded-xl backdrop-blur-md transition-all shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Add Bookmark</span>
+        </button>
       </div>
 
-      {/* QUICK LAUNCH GRID */}
-      {activeTab === 'quick' && (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-          {quickLinks.map((link) => (
-            <ShortcutIcon
-              key={link.id}
-              link={link}
-              onEdit={(e) => openEditModal(link, e)}
-              onDelete={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDeleteQuickLink(link.id);
-              }}
-            />
-          ))}
+      {/* QUICK LAUNCH TAB VIEW */}
+      {activeTab === "quick" && (
+        <div className="space-y-5">
+          {/* Section A: Custom Shortcuts */}
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+            {quickLinks.map((link) => (
+              <ShortcutIcon
+                key={link.id}
+                link={link}
+                onEdit={(e) => openEditModal(link, e)}
+                onDelete={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDeleteQuickLink(link.id);
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Section B: Most Used Links */}
+          {topSites.length > 0 && (
+            <div className="glass-panel rounded-2xl p-4 space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/90 border-b border-white/10 pb-2">
+                <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span>Most Used Links</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                {topSites.slice(0, 6).map((site: TopSiteNode, idx: number) => (
+                  <a
+                    key={idx}
+                    href={site.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all text-white/90 hover:text-white group"
+                  >
+                    <SiteFavicon
+                      url={site.url}
+                      title={site.title}
+                      className="w-5 h-5"
+                      containerClassName="w-9 h-9 mb-2"
+                    />
+                    <span className="text-[11px] font-medium truncate max-w-full text-center leading-tight">
+                      {site.title}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* CHROME BOOKMARKS TREE */}
-      {activeTab === 'chrome' && (
-        <div className="glass-panel rounded-2xl p-4 max-h-64 overflow-y-auto">
-          {loading ? (
-            <div className="text-center py-6 text-white/60 text-sm">Loading Chrome bookmarks...</div>
-          ) : chromeBookmarks.length === 0 ? (
-            <div className="text-center py-6 text-white/60 text-sm">
-              No bookmarks found or permission disabled.
+      {/* BOOKMARKS TAB VIEW */}
+      {activeTab === "bookmarks" && (
+        <div className="glass-panel rounded-2xl p-4 space-y-5 max-h-[420px] overflow-y-auto">
+          {/* SECTION 1: CUSTOM BOOKMARKS */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-white/90 border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-400" />
+                <span>Custom Bookmarks</span>
+              </div>
+              <span className="text-[10px] text-white/50">
+                {quickLinks.length} items
+              </span>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {chromeBookmarks.map((node) => (
-                <a
-                  key={node.id}
-                  href={node.url || '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 transition-all text-white/90 hover:text-white"
-                >
-                  {node.children ? (
-                    <Folder className="w-4 h-4 text-amber-400 shrink-0" />
-                  ) : (
-                    <ExternalLink className="w-4 h-4 text-accent shrink-0" />
-                  )}
-                  <span className="text-xs truncate">{node.title}</span>
-                </a>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+              {quickLinks.map((link) => (
+                <ShortcutIcon
+                  key={link.id}
+                  link={link}
+                  onEdit={(e) => openEditModal(link, e)}
+                  onDelete={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDeleteQuickLink(link.id);
+                  }}
+                />
               ))}
+            </div>
+          </div>
+
+          {/* SECTION 2: CHROME BOOKMARKS BAR */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-white/90 border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2">
+                <BookmarkCheck className="w-4 h-4 text-sky-400" />
+                <span>Chrome Bookmarks Bar</span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-6 text-white/60 text-sm">
+                Loading Chrome bookmarks...
+              </div>
+            ) : chromeBookmarks.length === 0 ? (
+              <div className="text-center py-6 text-white/60 text-sm">
+                No bookmarks found or Chrome bookmarks permission is not
+                granted.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {chromeBookmarks.map((node) => (
+                  <a
+                    key={node.id}
+                    href={node.url || "#"}
+                    target={node.url ? "_blank" : "_self"}
+                    rel="noreferrer"
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 hover:bg-white/15 border border-white/5 hover:border-white/20 transition-all text-white/90 hover:text-white group"
+                  >
+                    {node.children ? (
+                      <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
+                        <Folder className="w-4 h-4 text-amber-400" />
+                      </div>
+                    ) : node.url ? (
+                      <SiteFavicon
+                        url={node.url}
+                        title={node.title}
+                        className="w-4 h-4"
+                        containerClassName="w-7 h-7"
+                      />
+                    ) : (
+                      <ExternalLink className="w-4 h-4 text-accent shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium truncate">
+                        {node.title}
+                      </div>
+                      {node.url && (
+                        <div className="text-[10px] text-white/40 truncate">
+                          {new URL(
+                            node.url.startsWith("http")
+                              ? node.url
+                              : `https://${node.url}`,
+                          ).hostname.replace(/^www\./, "")}
+                        </div>
+                      )}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 3: MOST USED LINKS */}
+          {topSites.length > 0 && (
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-semibold text-white/90 border-b border-white/10 pb-2">
+                <Flame className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span>Most Used Links</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                {topSites.slice(0, 6).map((site: TopSiteNode, idx: number) => (
+                  <a
+                    key={idx}
+                    href={site.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex flex-col items-center justify-center p-3 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/25 transition-all text-white/90 hover:text-white group"
+                  >
+                    <SiteFavicon
+                      url={site.url}
+                      title={site.title}
+                      className="w-5 h-5"
+                      containerClassName="w-9 h-9 mb-2"
+                    />
+                    <span className="text-[11px] font-medium truncate max-w-full text-center leading-tight">
+                      {site.title}
+                    </span>
+                  </a>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -296,15 +458,15 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
 
       {/* ADD / EDIT LINK MODAL */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="glass-panel w-full max-w-md rounded-2xl p-6 border border-white/20 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">
-                {editingLink ? 'Edit Shortcut' : 'Add New Shortcut'}
+                {editingLink ? "Edit Shortcut" : "Add New Shortcut"}
               </h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded-lg"
+                className="p-1 text-white/60 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -312,7 +474,9 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
 
             <form onSubmit={handleSaveLink} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1">Title</label>
+                <label className="block text-xs font-medium text-white/70 mb-1">
+                  Title
+                </label>
                 <input
                   type="text"
                   required
@@ -324,7 +488,9 @@ export const BookmarksWidget: React.FC<BookmarksWidgetProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1">URL</label>
+                <label className="block text-xs font-medium text-white/70 mb-1">
+                  URL
+                </label>
                 <input
                   type="text"
                   required

@@ -66,7 +66,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ config, onUpdateEngine }) 
   if (!config.enabled) return null;
 
   return (
-    <div className="relative w-full max-w-2xl mx-auto z-20 my-4">
+    <div className="relative w-full max-w-2xl mx-auto z-10 my-4">
       <form onSubmit={handleSearch} className="relative flex items-center">
         {/* Engine dropdown selector button */}
         <div className="relative">

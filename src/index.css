@@ -1,6 +1,12 @@
+@import url('https://fonts.cdnfonts.com/css/anurati');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.font-anurati {
+  font-family: 'Anurati', 'Outfit', 'Space Grotesk', sans-serif;
+}
 
 @layer base {
   :root {
